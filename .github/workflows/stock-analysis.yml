@@ -1,0 +1,134 @@
+name: 📈 每日股市分析
+
+on:
+  # 排程執行
+  schedule:
+    # 台股：週一至週五 14:30 台灣時間 (06:30 UTC)
+    - cron: '30 6 * * 1-5'
+    # 美股：週二至週六 05:30 台灣時間 (21:30 UTC 前一天)
+    - cron: '30 21 * * 1-5'
+
+  # 手動觸發
+  workflow_dispatch:
+    inputs:
+      market:
+        description: '分析市場'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - tw
+          - us
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout 程式碼
+        uses: actions/checkout@v4
+
+      - name: 🐍 設定 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: 📦 安裝依賴
+        run: pip install -r requirements.txt
+
+      - name: 📝 建立設定檔
+        run: |
+          cat > config/settings.py << 'EOF'
+          """股票推播機器人配置檔案"""
+
+          import os
+
+          DISCORD_WEBHOOK_URL = os.environ.get('DISCORD_WEBHOOK_URL', '')
+
+          MARKETS = {
+              "TW": {
+                  "name": "台股",
+                  "index_symbol": "^TWII",
+                  "sectors": {
+                      "半導體": ["2330.TW", "2454.TW", "2303.TW", "3711.TW", "2379.TW"],
+                      "電子零組件": ["2317.TW", "2382.TW", "3008.TW", "2408.TW", "2327.TW"],
+                      "金融": ["2881.TW", "2882.TW", "2883.TW", "2884.TW", "2891.TW"],
+                      "傳產": ["1301.TW", "1303.TW", "1326.TW", "2002.TW", "2105.TW"],
+                      "航運": ["2603.TW", "2609.TW", "2615.TW", "2618.TW", "5880.TW"],
+                      "生技醫療": ["4904.TW", "1476.TW", "6446.TW", "4743.TW", "1707.TW"],
+                      "綠能": ["3481.TW", "6803.TW", "3576.TW", "6443.TW", "6488.TW"],
+                  }
+              },
+              "US": {
+                  "name": "美股",
+                  "indices": {
+                      "S&P 500": "^GSPC",
+                      "道瓊工業": "^DJI",
+                      "那斯達克": "^IXIC",
+                      "費城半導體": "^SOX",
+                  },
+                  "sectors": {
+                      "科技巨頭": ["AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA"],
+                      "半導體": ["NVDA", "AMD", "INTC", "TSM", "AVGO", "QCOM"],
+                      "AI概念": ["NVDA", "MSFT", "GOOGL", "PLTR", "AI", "SNOW"],
+                      "電動車": ["TSLA", "RIVN", "LCID", "NIO", "LI", "XPEV"],
+                      "金融": ["JPM", "BAC", "WFC", "GS", "MS", "C"],
+                      "醫療保健": ["JNJ", "UNH", "PFE", "ABBV", "MRK", "LLY"],
+                      "能源": ["XOM", "CVX", "COP", "SLB", "EOG", "PXD"],
+                  }
+              }
+          }
+
+          TECHNICAL_PARAMS = {
+              "sma_short": 5,
+              "sma_medium": 20,
+              "sma_long": 60,
+              "rsi_period": 14,
+              "rsi_overbought": 70,
+              "rsi_oversold": 30,
+              "macd_fast": 12,
+              "macd_slow": 26,
+              "macd_signal": 9,
+              "volume_ma": 20,
+          }
+
+          FILTER_PARAMS = {
+              "min_volume_ratio": 1.5,
+              "min_price_change": 2.0,
+              "max_price_change": 10.0,
+              "rsi_min": 40,
+              "rsi_max": 75,
+          }
+
+          SCHEDULE = {
+              "tw_market_close": "14:30",
+              "us_market_close": "05:30",
+              "timezone": "Asia/Taipei"
+          }
+          EOF
+
+      - name: 🔍 判斷分析市場
+        id: market
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "market=${{ github.event.inputs.market }}" >> $GITHUB_OUTPUT
+          else
+            # 根據 UTC 時間判斷
+            HOUR=$(date -u +%H)
+            if [ "$HOUR" -ge 6 ] && [ "$HOUR" -lt 12 ]; then
+              echo "market=tw" >> $GITHUB_OUTPUT
+            else
+              echo "market=us" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+      - name: 📊 執行股市分析
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          python main.py --market ${{ steps.market.outputs.market }}
+
+      - name: ✅ 完成
+        run: echo "分析完成！已推播到 Discord"
