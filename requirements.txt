@@ -1,0 +1,18 @@
+# 股市推播機器人 依賴套件
+
+# 數據獲取
+yfinance>=0.2.36
+
+# 數據處理
+pandas>=2.0.0
+numpy>=1.24.0
+
+# HTTP 請求 (Discord Webhook)
+requests>=2.31.0
+
+# 排程
+schedule>=1.2.0
+
+# 可選：更進階的技術分析 (如需要)
+# ta-lib  # 需要額外安裝系統套件
+# pandas-ta>=0.3.14b
