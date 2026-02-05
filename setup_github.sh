@@ -16,8 +16,8 @@ if [ ! -d ".git" ]; then
 fi
 
 # 添加檔案
-git add .gitignore README.md requirements.txt run.sh main.py
-git add config/__init__.py config/settings.example.py
+git add .gitignore README.md requirements.txt run.sh main.py manage_stocks.py
+git add config/__init__.py config/settings.example.py config/stocks.json
 git add modules/*.py
 git add .github/workflows/stock-analysis.yml
 
