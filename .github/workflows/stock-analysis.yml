@@ -40,74 +40,19 @@ jobs:
 
       - name: 📝 建立設定檔
         run: |
-          cat > config/settings.py << 'EOF'
-          """股票推播機器人配置檔案"""
-
-          import os
-
-          DISCORD_WEBHOOK_URL = os.environ.get('DISCORD_WEBHOOK_URL', '')
-
-          MARKETS = {
-              "TW": {
-                  "name": "台股",
-                  "index_symbol": "^TWII",
-                  "sectors": {
-                      "半導體": ["2330.TW", "2454.TW", "2303.TW", "3711.TW", "2379.TW"],
-                      "電子零組件": ["2317.TW", "2382.TW", "3008.TW", "2408.TW", "2327.TW"],
-                      "金融": ["2881.TW", "2882.TW", "2883.TW", "2884.TW", "2891.TW"],
-                      "傳產": ["1301.TW", "1303.TW", "1326.TW", "2002.TW", "2105.TW"],
-                      "航運": ["2603.TW", "2609.TW", "2615.TW", "2618.TW", "5880.TW"],
-                      "生技醫療": ["4904.TW", "1476.TW", "6446.TW", "4743.TW", "1707.TW"],
-                      "綠能": ["3481.TW", "6803.TW", "3576.TW", "6443.TW", "6488.TW"],
-                  }
-              },
-              "US": {
-                  "name": "美股",
-                  "indices": {
-                      "S&P 500": "^GSPC",
-                      "道瓊工業": "^DJI",
-                      "那斯達克": "^IXIC",
-                      "費城半導體": "^SOX",
-                  },
-                  "sectors": {
-                      "科技巨頭": ["AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA"],
-                      "半導體": ["NVDA", "AMD", "INTC", "TSM", "AVGO", "QCOM"],
-                      "AI概念": ["NVDA", "MSFT", "GOOGL", "PLTR", "AI", "SNOW"],
-                      "電動車": ["TSLA", "RIVN", "LCID", "NIO", "LI", "XPEV"],
-                      "金融": ["JPM", "BAC", "WFC", "GS", "MS", "C"],
-                      "醫療保健": ["JNJ", "UNH", "PFE", "ABBV", "MRK", "LLY"],
-                      "能源": ["XOM", "CVX", "COP", "SLB", "EOG", "PXD"],
-                  }
-              }
-          }
-
-          TECHNICAL_PARAMS = {
-              "sma_short": 5,
-              "sma_medium": 20,
-              "sma_long": 60,
-              "rsi_period": 14,
-              "rsi_overbought": 70,
-              "rsi_oversold": 30,
-              "macd_fast": 12,
-              "macd_slow": 26,
-              "macd_signal": 9,
-              "volume_ma": 20,
-          }
-
-          FILTER_PARAMS = {
-              "min_volume_ratio": 1.5,
-              "min_price_change": 2.0,
-              "max_price_change": 10.0,
-              "rsi_min": 40,
-              "rsi_max": 75,
-          }
-
-          SCHEDULE = {
-              "tw_market_close": "14:30",
-              "us_market_close": "05:30",
-              "timezone": "Asia/Taipei"
-          }
-          EOF
+          cp config/settings.example.py config/settings.py
+          python -c "
+          import pathlib, re
+          p = pathlib.Path('config/settings.py')
+          text = p.read_text()
+          text = re.sub(
+              r'DISCORD_WEBHOOK_URL\s*=\s*.*',
+              'import os\nDISCORD_WEBHOOK_URL = os.environ.get(\"DISCORD_WEBHOOK_URL\", \"\")',
+              text,
+              count=1,
+          )
+          p.write_text(text)
+          "
 
       - name: 🔍 判斷分析市場
         id: market

@@ -3,43 +3,117 @@
 請複製此檔案並重命名為 settings.py，然後設定你的 Discord Webhook URL
 """
 
+import json
+import os
+
+# 取得配置檔案路徑
+CONFIG_DIR = os.path.dirname(os.path.abspath(__file__))
+STOCKS_FILE = os.path.join(CONFIG_DIR, "stocks.json")
+
 # Discord Webhook URL (請替換成你的 Webhook URL)
 DISCORD_WEBHOOK_URL = "YOUR_DISCORD_WEBHOOK_URL_HERE"
 
-# 市場設定
-MARKETS = {
-    "TW": {
-        "name": "台股",
-        "index_symbol": "^TWII",  # 台灣加權指數
-        "sectors": {
-            "半導體": ["2330.TW", "2454.TW", "2303.TW", "3711.TW", "2379.TW"],
-            "電子零組件": ["2317.TW", "2382.TW", "3008.TW", "2408.TW", "2327.TW"],
-            "金融": ["2881.TW", "2882.TW", "2883.TW", "2884.TW", "2891.TW"],
-            "傳產": ["1301.TW", "1303.TW", "1326.TW", "2002.TW", "2105.TW"],
-            "航運": ["2603.TW", "2609.TW", "2615.TW", "2618.TW", "5880.TW"],
-            "生技醫療": ["4904.TW", "1476.TW", "6446.TW", "4743.TW", "1707.TW"],
-            "綠能": ["3481.TW", "6803.TW", "3576.TW", "6443.TW", "6488.TW"],
+
+def load_markets():
+    """從 JSON 檔案載入市場與股票設定"""
+    if os.path.exists(STOCKS_FILE):
+        with open(STOCKS_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    else:
+        # 預設配置（當 JSON 檔案不存在時）
+        return {
+            "TW": {
+                "name": "台股",
+                "index_symbol": "^TWII",
+                "sectors": {}
+            },
+            "US": {
+                "name": "美股",
+                "indices": {},
+                "sectors": {}
+            }
         }
-    },
-    "US": {
-        "name": "美股",
-        "indices": {
-            "S&P 500": "^GSPC",
-            "道瓊工業": "^DJI",
-            "那斯達克": "^IXIC",
-            "費城半導體": "^SOX",
-        },
-        "sectors": {
-            "科技巨頭": ["AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA"],
-            "半導體": ["NVDA", "AMD", "INTC", "TSM", "AVGO", "QCOM"],
-            "AI概念": ["NVDA", "MSFT", "GOOGL", "PLTR", "AI", "SNOW"],
-            "電動車": ["TSLA", "RIVN", "LCID", "NIO", "LI", "XPEV"],
-            "金融": ["JPM", "BAC", "WFC", "GS", "MS", "C"],
-            "醫療保健": ["JNJ", "UNH", "PFE", "ABBV", "MRK", "LLY"],
-            "能源": ["XOM", "CVX", "COP", "SLB", "EOG", "PXD"],
-        }
-    }
-}
+
+
+def save_markets(markets):
+    """儲存市場與股票設定到 JSON 檔案"""
+    with open(STOCKS_FILE, 'w', encoding='utf-8') as f:
+        json.dump(markets, f, ensure_ascii=False, indent=2)
+
+
+def add_stock(market: str, sector: str, symbol: str):
+    """
+    新增股票到指定類股
+
+    Args:
+        market: "TW" 或 "US"
+        sector: 類股名稱
+        symbol: 股票代碼
+    """
+    markets = load_markets()
+    if market in markets:
+        if sector not in markets[market]["sectors"]:
+            markets[market]["sectors"][sector] = []
+        if symbol not in markets[market]["sectors"][sector]:
+            markets[market]["sectors"][sector].append(symbol)
+            save_markets(markets)
+            return True
+    return False
+
+
+def remove_stock(market: str, sector: str, symbol: str):
+    """
+    從指定類股移除股票
+
+    Args:
+        market: "TW" 或 "US"
+        sector: 類股名稱
+        symbol: 股票代碼
+    """
+    markets = load_markets()
+    if market in markets and sector in markets[market]["sectors"]:
+        if symbol in markets[market]["sectors"][sector]:
+            markets[market]["sectors"][sector].remove(symbol)
+            save_markets(markets)
+            return True
+    return False
+
+
+def add_sector(market: str, sector: str, stocks: list = None):
+    """
+    新增類股
+
+    Args:
+        market: "TW" 或 "US"
+        sector: 類股名稱
+        stocks: 股票代碼列表
+    """
+    markets = load_markets()
+    if market in markets:
+        markets[market]["sectors"][sector] = stocks or []
+        save_markets(markets)
+        return True
+    return False
+
+
+def remove_sector(market: str, sector: str):
+    """
+    移除類股
+
+    Args:
+        market: "TW" 或 "US"
+        sector: 類股名稱
+    """
+    markets = load_markets()
+    if market in markets and sector in markets[market]["sectors"]:
+        del markets[market]["sectors"][sector]
+        save_markets(markets)
+        return True
+    return False
+
+
+# 載入市場設定
+MARKETS = load_markets()
 
 # 技術指標參數
 TECHNICAL_PARAMS = {
