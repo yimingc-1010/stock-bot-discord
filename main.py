@@ -29,17 +29,19 @@ from modules.market_analyzer import MarketAnalyzer
 from modules.sector_scanner import SectorScanner
 from modules.predictor import TrendPredictor
 from modules.discord_bot import DiscordNotifier
+from modules.stock_discovery import StockDiscovery
 
 
 class StockBot:
     """股市推播機器人"""
 
-    def __init__(self, webhook_url: str = None):
+    def __init__(self, webhook_url: str = None, enable_discovery: bool = True):
         """
         初始化機器人
 
         Args:
             webhook_url: Discord Webhook URL (可選，預設使用設定檔)
+            enable_discovery: 是否啟用動態發現功能
         """
         self.webhook_url = webhook_url or DISCORD_WEBHOOK_URL
         self.fetcher = DataFetcher()
@@ -47,6 +49,8 @@ class StockBot:
         self.scanner = SectorScanner(self.fetcher)
         self.predictor = TrendPredictor(self.fetcher)
         self.notifier = DiscordNotifier(self.webhook_url)
+        self.enable_discovery = enable_discovery
+        self.discovery = StockDiscovery(self.fetcher, self.scanner)
 
         logger.info("股市推播機器人初始化完成")
 
@@ -129,9 +133,18 @@ class StockBot:
             else:
                 us_result = None
 
+            # 動態發現
+            discoveries = {}
+            if self.enable_discovery:
+                try:
+                    discoveries = self.discovery.discover(market=market, top_n=10)
+                except Exception as e:
+                    logger.warning(f"動態發現失敗: {e}")
+
             return {
                 "tw": tw_result,
                 "us": us_result,
+                "discoveries": discoveries,
                 "timestamp": datetime.now().isoformat()
             }
 
@@ -179,6 +192,11 @@ class StockBot:
                 us_outlook=us_outlook,
                 top_stocks=all_top_stocks[:10]
             )
+
+            # 發送動態發現報告
+            discoveries = result.get("discoveries", {})
+            if discoveries:
+                self.notifier.send_discovery_report(discoveries)
 
             logger.info("每日報告發送完成")
 
@@ -317,6 +335,22 @@ class StockBot:
                 for i, sector in enumerate(us["sectors"][:5], 1):
                     print(f"  {i}. {sector.name}: {sector.strength_score:.0f}")
 
+        # 動態發現
+        discoveries = result.get("discoveries", {})
+        if discoveries:
+            print("\n【📡 市場雷達 — 量能動能領先股】")
+            for mkt, stocks in discoveries.items():
+                if stocks:
+                    mkt_name = "台股" if mkt == "tw" else "美股"
+                    print(f"\n{mkt_name}:")
+                    for i, stock in enumerate(stocks[:5], 1):
+                        print(
+                            f"  {i}. {stock.symbol} ({stock.name}): "
+                            f"強度 {stock.strength_score:.0f} | "
+                            f"漲跌 {stock.price_change_pct:+.2f}% | "
+                            f"量能 {stock.volume_ratio:.1f}x"
+                        )
+
         print("\n" + "=" * 60)
 
 
@@ -351,10 +385,17 @@ def main():
         help="快速模式 (僅大盤分析)"
     )
 
+    parser.add_argument(
+        "--no-discovery",
+        action="store_true",
+        help="停用動態股票發現功能"
+    )
+
     args = parser.parse_args()
 
-    # 初始化機器人
-    bot = StockBot(webhook_url=args.webhook)
+    # 初始化機器人（快速模式或明確停用時關閉發現功能）
+    enable_discovery = not args.no_discovery and not args.quick
+    bot = StockBot(webhook_url=args.webhook, enable_discovery=enable_discovery)
 
     if args.mode == "schedule":
         # 排程模式

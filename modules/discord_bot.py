@@ -498,6 +498,85 @@ class DiscordNotifier:
 
         return self.send_message(embeds=[embed])
 
+    def send_discovery_report(
+        self,
+        discoveries: Dict[str, List[StockAnalysis]],
+    ) -> bool:
+        """
+        發送市場雷達（動態發現）報告
+
+        Args:
+            discoveries: {"tw": [StockAnalysis, ...], "us": [...]}
+
+        Returns:
+            是否發送成功
+        """
+        now = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+        all_stocks: List[StockAnalysis] = []
+        for market_stocks in discoveries.values():
+            all_stocks.extend(market_stocks)
+
+        if not all_stocks:
+            return True  # 沒有發現結果，靜默跳過
+
+        all_stocks.sort(key=lambda x: x.strength_score, reverse=True)
+
+        embeds = []
+
+        header_embed = {
+            "title": "📡 市場雷達 — 今日量能動能領先股",
+            "description": (
+                f"更新時間: {now}\n"
+                "以下為觀察名單外，今日量能放大且動能領先的個股"
+            ),
+            "color": self.colors["info"],
+        }
+        embeds.append(header_embed)
+
+        for stock in all_stocks[:10]:
+            change_sign = "+" if stock.price_change_pct >= 0 else ""
+
+            embed = {
+                "title": f"📡 {stock.symbol} - {stock.name}",
+                "color": self.colors["bullish"] if stock.buy_signal else self.colors["info"],
+                "fields": [
+                    {
+                        "name": "現價",
+                        "value": f"{stock.current_price:,.2f}",
+                        "inline": True,
+                    },
+                    {
+                        "name": "漲跌幅",
+                        "value": f"{change_sign}{stock.price_change_pct:.2f}%",
+                        "inline": True,
+                    },
+                    {
+                        "name": "強度分數",
+                        "value": f"{stock.strength_score:.0f}/100",
+                        "inline": True,
+                    },
+                    {
+                        "name": "量能",
+                        "value": f"{stock.volume_ratio:.1f}x",
+                        "inline": True,
+                    },
+                    {
+                        "name": "RSI",
+                        "value": f"{stock.rsi:.1f}",
+                        "inline": True,
+                    },
+                    {
+                        "name": "分析",
+                        "value": stock.analysis_note or "—",
+                        "inline": False,
+                    },
+                ],
+            }
+            embeds.append(embed)
+
+        return self.send_message(embeds=embeds)
+
     def send_daily_report(
         self,
         tw_index_analysis: Optional[MarketAnalysis],
