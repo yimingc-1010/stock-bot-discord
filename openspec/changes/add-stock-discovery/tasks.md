@@ -1,0 +1,11 @@
+## 1. Implementation
+- [ ] 1.1 Create `modules/stock_discovery.py` with `StockDiscovery` class
+- [ ] 1.2 Implement `discover_us_movers()` using yfinance screener API
+- [ ] 1.3 Implement `discover_tw_movers()` using TW universe constant list
+- [ ] 1.4 Implement `discover()` dispatcher method
+- [ ] 1.5 Add rate limiting (0.3s delay between fetches)
+- [ ] 1.6 Add `send_discovery_report()` to `modules/discord_bot.py`
+- [ ] 1.7 Integrate discovery into `main.py` analysis pipeline
+- [ ] 1.8 Add `--no-discovery` CLI flag
+- [ ] 1.9 Add `__main__` standalone test block to `stock_discovery.py`
+- [ ] 1.10 Add discovery output to `print_analysis()` terminal mode
