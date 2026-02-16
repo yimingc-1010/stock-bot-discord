@@ -13,6 +13,9 @@ STOCKS_FILE = os.path.join(CONFIG_DIR, "stocks.json")
 # Discord Webhook URL (請替換成你的 Webhook URL)
 DISCORD_WEBHOOK_URL = "YOUR_DISCORD_WEBHOOK_URL_HERE"
 
+# FRED API Key (免費申請: https://fred.stlouisfed.org/docs/api/api_key.html)
+FRED_API_KEY = os.environ.get("FRED_API_KEY", "")
+
 
 def load_markets():
     """從 JSON 檔案載入市場與股票設定"""

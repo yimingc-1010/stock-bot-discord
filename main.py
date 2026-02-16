@@ -30,18 +30,21 @@ from modules.sector_scanner import SectorScanner
 from modules.predictor import TrendPredictor
 from modules.discord_bot import DiscordNotifier
 from modules.stock_discovery import StockDiscovery
+from modules.macro_fetcher import MacroFetcher
+from modules.cycle_analyzer import CycleAnalyzer
 
 
 class StockBot:
     """股市推播機器人"""
 
-    def __init__(self, webhook_url: str = None, enable_discovery: bool = True):
+    def __init__(self, webhook_url: str = None, enable_discovery: bool = True, enable_macro: bool = True):
         """
         初始化機器人
 
         Args:
             webhook_url: Discord Webhook URL (可選，預設使用設定檔)
             enable_discovery: 是否啟用動態發現功能
+            enable_macro: 是否啟用總經景氣循環分析
         """
         self.webhook_url = webhook_url or DISCORD_WEBHOOK_URL
         self.fetcher = DataFetcher()
@@ -51,6 +54,8 @@ class StockBot:
         self.notifier = DiscordNotifier(self.webhook_url)
         self.enable_discovery = enable_discovery
         self.discovery = StockDiscovery(self.fetcher, self.scanner)
+        self.enable_macro = enable_macro
+        self.cycle_analyzer = CycleAnalyzer()
 
         logger.info("股市推播機器人初始化完成")
 
@@ -141,10 +146,19 @@ class StockBot:
                 except Exception as e:
                     logger.warning(f"動態發現失敗: {e}")
 
+            # 景氣循環分析（僅美股）
+            cycle_analysis = None
+            if self.enable_macro and market in ["us", "all"]:
+                try:
+                    cycle_analysis = self.cycle_analyzer.analyze()
+                except Exception as e:
+                    logger.warning(f"景氣循環分析失敗: {e}")
+
             return {
                 "tw": tw_result,
                 "us": us_result,
                 "discoveries": discoveries,
+                "cycle": cycle_analysis,
                 "timestamp": datetime.now().isoformat()
             }
 
@@ -182,22 +196,49 @@ class StockBot:
             # 按強度排序
             all_top_stocks.sort(key=lambda x: x.strength_score, reverse=True)
 
-            # 發送報告
-            self.notifier.send_daily_report(
-                tw_index_analysis=tw_index,
-                us_analyses=us_indices,
-                tw_sectors=tw_sectors,
-                us_sectors=us_sectors,
-                tw_outlook=tw_outlook,
-                us_outlook=us_outlook,
-                top_stocks=all_top_stocks[:10]
-            )
-
+            # 發送報告開頭和主體內容
+            now = datetime.now().strftime("%Y-%m-%d")
+            self.notifier.send_message(content=f"# 📈 {now} 每日股市分析報告\n---")
+            
+            # 發送台股相關分析
+            if tw_index:
+                self.notifier.send_market_analysis({"^TWII": tw_index}, "台股")
+            if tw_sectors:
+                self.notifier.send_sector_analysis(tw_sectors, "台股")
+            if tw_outlook:
+                self.notifier.send_market_outlook(tw_outlook)
+                
+            # 發送美股相關分析
+            if us_indices:
+                self.notifier.send_market_analysis(us_indices, "美股")
+            if us_sectors:
+                self.notifier.send_sector_analysis(us_sectors, "美股")
+            if us_outlook:
+                self.notifier.send_market_outlook(us_outlook)
+            
+            # 發送景氣循環分析
+            cycle = result.get("cycle")
+            if cycle:
+                self.notifier.send_cycle_analysis(cycle)
+                
+            # 發送強勢個股推薦
+            if all_top_stocks:
+                self.notifier.send_stock_recommendations(all_top_stocks[:10], "今日強勢個股")
+                
             # 發送動態發現報告
             discoveries = result.get("discoveries", {})
             if discoveries:
                 self.notifier.send_discovery_report(discoveries)
-
+                
+            # 最後發送免責聲明
+            self.notifier.send_message(
+                content=(
+                    "---\n"
+                    "⚠️ **免責聲明**: 以上分析僅供參考，不構成投資建議。\n"
+                    "投資有風險，請依個人風險承受度審慎評估。"
+                )
+            )
+            
             logger.info("每日報告發送完成")
 
         except Exception as e:
@@ -335,6 +376,17 @@ class StockBot:
                 for i, sector in enumerate(us["sectors"][:5], 1):
                     print(f"  {i}. {sector.name}: {sector.strength_score:.0f}")
 
+        # 景氣循環分析
+        cycle = result.get("cycle")
+        if cycle:
+            print(f"\n【🔄 景氣循環分析 — Izaax Method】")
+            print(f"  當前階段: {cycle.phase.value}")
+            print(f"  信心度:   {cycle.confidence.value}")
+            print(f"  配置建議: {cycle.allocation}")
+            print(f"  指標:")
+            for ind in cycle.indicators:
+                print(f"    {ind.trend} {ind.name}: {ind.value:,.2f}  [{ind.data_date}]")
+
         # 動態發現
         discoveries = result.get("discoveries", {})
         if discoveries:
@@ -391,11 +443,18 @@ def main():
         help="停用動態股票發現功能"
     )
 
+    parser.add_argument(
+        "--no-macro",
+        action="store_true",
+        help="停用總經景氣循環分析"
+    )
+
     args = parser.parse_args()
 
-    # 初始化機器人（快速模式或明確停用時關閉發現功能）
+    # 初始化機器人（快速模式或明確停用時關閉發現/總經功能）
     enable_discovery = not args.no_discovery and not args.quick
-    bot = StockBot(webhook_url=args.webhook, enable_discovery=enable_discovery)
+    enable_macro = not args.no_macro and not args.quick
+    bot = StockBot(webhook_url=args.webhook, enable_discovery=enable_discovery, enable_macro=enable_macro)
 
     if args.mode == "schedule":
         # 排程模式

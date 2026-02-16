@@ -13,6 +13,9 @@ requests>=2.31.0
 # 排程
 schedule>=1.2.0
 
+# 總體經濟數據 (FRED)
+fredapi>=0.5.0
+
 # 可選：更進階的技術分析 (如需要)
 # ta-lib  # 需要額外安裝系統套件
 # pandas-ta>=0.3.14b

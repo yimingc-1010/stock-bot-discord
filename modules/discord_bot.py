@@ -13,6 +13,7 @@ import logging
 from .market_analyzer import MarketAnalysis, TrendDirection
 from .sector_scanner import SectorAnalysis, StockAnalysis
 from .predictor import PricePrediction, MarketOutlook, PredictionDirection
+from .cycle_analyzer import CycleAnalysis, CyclePhase, PHASE_COLORS
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -498,6 +499,80 @@ class DiscordNotifier:
 
         return self.send_message(embeds=[embed])
 
+    def send_cycle_analysis(self, analysis: CycleAnalysis) -> bool:
+        """
+        發送景氣循環分析儀表板
+
+        Args:
+            analysis: CycleAnalysis 分析結果
+
+        Returns:
+            是否發送成功
+        """
+        now = datetime.now().strftime("%Y-%m-%d %H:%M")
+        color = PHASE_COLORS.get(analysis.phase, self.colors["info"])
+
+        # 分類指標
+        categories = {}
+        for ind in analysis.indicators:
+            categories.setdefault(ind.category, []).append(ind)
+
+        # 建構指標文字
+        indicator_lines = []
+        for cat, inds in categories.items():
+            lines = [f"**【{cat}】**"]
+            for ind in inds:
+                lines.append(f"{ind.trend} {ind.name}: {ind.value:,.2f}  `{ind.data_date}`")
+            indicator_lines.append("\n".join(lines))
+
+        indicators_text = "\n\n".join(indicator_lines) or "無可用指標"
+
+        # 階段分數摘要
+        score_lines = []
+        for phase_name, score in sorted(
+            analysis.phase_scores.items(), key=lambda x: x[1], reverse=True
+        ):
+            marker = " ◀" if phase_name == analysis.phase.name else ""
+            score_lines.append(f"{CyclePhase[phase_name].value}: {score:.1f}{marker}")
+
+        embed = {
+            "title": f"🔄 景氣循環分析 — Izaax Method",
+            "description": f"更新時間: {now}",
+            "color": color,
+            "fields": [
+                {
+                    "name": "當前階段",
+                    "value": analysis.phase.value,
+                    "inline": True,
+                },
+                {
+                    "name": "信心度",
+                    "value": analysis.confidence.value,
+                    "inline": True,
+                },
+                {
+                    "name": "配置建議",
+                    "value": analysis.allocation,
+                    "inline": True,
+                },
+                {
+                    "name": "📊 總經指標",
+                    "value": indicators_text,
+                    "inline": False,
+                },
+                {
+                    "name": "🎯 階段評分",
+                    "value": "\n".join(score_lines),
+                    "inline": False,
+                },
+            ],
+            "footer": {
+                "text": "資料來源: FRED (Federal Reserve Economic Data) | ⚠️ 僅供參考，不構成投資建議",
+            },
+        }
+
+        return self.send_message(embeds=[embed])
+
     def send_discovery_report(
         self,
         discoveries: Dict[str, List[StockAnalysis]],
@@ -577,6 +652,7 @@ class DiscordNotifier:
 
         return self.send_message(embeds=embeds)
 
+    # 此方法已被棄用，實際處理邏輯已移至 main.py
     def send_daily_report(
         self,
         tw_index_analysis: Optional[MarketAnalysis],
@@ -588,7 +664,7 @@ class DiscordNotifier:
         top_stocks: List[StockAnalysis]
     ) -> bool:
         """
-        發送每日完整報告
+        發送每日完整報告（已棄用，請參考 main.py 中的實現）
 
         Args:
             各項分析結果
@@ -596,6 +672,7 @@ class DiscordNotifier:
         Returns:
             是否發送成功
         """
+        logger.warning("使用已棄用的 send_daily_report 方法，請參考 main.py 中的最新實現")
         success = True
         now = datetime.now().strftime("%Y-%m-%d")
 

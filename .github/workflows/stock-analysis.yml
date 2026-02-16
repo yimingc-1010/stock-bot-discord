@@ -72,6 +72,7 @@ jobs:
       - name: 📊 執行股市分析
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
         run: |
           python main.py --market ${{ steps.market.outputs.market }}
 
