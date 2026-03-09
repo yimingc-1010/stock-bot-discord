@@ -1,0 +1,9 @@
+{
+  "portfolio_target_return": 0.15,
+  "rebalance_threshold": 0.05,
+  "holdings": [
+    { "symbol": "NVDA", "shares": 10, "avg_cost": 450.00 },
+    { "symbol": "AAPL", "shares": 20, "avg_cost": 175.00 },
+    { "symbol": "2330.TW", "shares": 100, "avg_cost": 850.00 }
+  ]
+}

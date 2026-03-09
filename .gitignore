@@ -25,3 +25,4 @@ Thumbs.db
 
 # 敏感配置 (請複製 settings.example.py 並重命名為 settings.py)
 config/settings.py
+config/holdings.json
