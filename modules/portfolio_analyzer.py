@@ -10,6 +10,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
+from modules.data_fetcher import DataFetcher
+
 logger = logging.getLogger(__name__)
 
 HOLDINGS_PATH = Path(__file__).parent.parent / "config" / "holdings.json"
@@ -80,3 +82,66 @@ def load_holdings_config() -> dict:
                 raise ValueError(f"持倉項目缺少欄位 '{field_name}': {h}")
 
     return config
+
+
+class PortfolioAnalyzer:
+    """持倉分析器：計算 Sharpe Ratio、目標比例、再平衡建議"""
+
+    TRADING_DAYS = 252
+
+    def __init__(self, fetcher: DataFetcher = None):
+        self.fetcher = fetcher or DataFetcher()
+
+    def _fetch_price_and_history(self, symbol: str):
+        """
+        取得現價與 1 年歷史資料。
+
+        Returns:
+            (current_price, history_df) or (None, None) on failure
+        """
+        data = self.fetcher.get_stock_data(symbol, period="1y")
+        if data is None or len(data) < 60:
+            logger.warning(f"無法取得 {symbol} 的歷史資料")
+            return None, None
+        current_price = float(data["Close"].iloc[-1])
+        return current_price, data
+
+    def _calculate_sharpe(self, history) -> tuple[float, float]:
+        """
+        計算 1 年年化報酬率與 Sharpe Ratio（無風險利率假設 0）。
+
+        Returns:
+            (annual_return, sharpe_ratio)
+        """
+        close = history["Close"]
+        daily_returns = close.pct_change().dropna()
+
+        annual_return = float((1 + daily_returns).prod() ** (self.TRADING_DAYS / len(daily_returns)) - 1)
+        volatility = float(daily_returns.std() * np.sqrt(self.TRADING_DAYS))
+
+        if volatility == 0:
+            return annual_return, 0.0
+
+        sharpe = annual_return / volatility
+        return annual_return, sharpe
+
+    def _calculate_target_weights(self, sharpe_ratios: dict[str, float]) -> dict[str, float]:
+        """
+        依 Sharpe Ratio 計算目標比例。
+        負 Sharpe 的股票目標比例為 0（建議移除）。
+
+        Args:
+            sharpe_ratios: {symbol: sharpe_ratio}
+
+        Returns:
+            {symbol: target_weight}  — values sum to 1.0
+        """
+        positive = {sym: max(sharpe, 0.0) for sym, sharpe in sharpe_ratios.items()}
+        total = sum(positive.values())
+
+        if total == 0:
+            # 全部為負 Sharpe — 平均分配（讓使用者自行決定是否移除）
+            n = len(positive)
+            return {sym: 1.0 / n for sym in positive}
+
+        return {sym: val / total for sym, val in positive.items()}
