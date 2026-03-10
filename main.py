@@ -32,12 +32,13 @@ from modules.discord_bot import DiscordNotifier
 from modules.stock_discovery import StockDiscovery
 from modules.macro_fetcher import MacroFetcher
 from modules.cycle_analyzer import CycleAnalyzer
+from modules.portfolio_analyzer import PortfolioAnalyzer
 
 
 class StockBot:
     """股市推播機器人"""
 
-    def __init__(self, webhook_url: str = None, enable_discovery: bool = True, enable_macro: bool = True):
+    def __init__(self, webhook_url: str = None, enable_discovery: bool = True, enable_macro: bool = True, enable_portfolio: bool = True):
         """
         初始化機器人
 
@@ -56,6 +57,8 @@ class StockBot:
         self.discovery = StockDiscovery(self.fetcher, self.scanner)
         self.enable_macro = enable_macro
         self.cycle_analyzer = CycleAnalyzer()
+        self.enable_portfolio = enable_portfolio
+        self.portfolio_analyzer = PortfolioAnalyzer(self.fetcher) if enable_portfolio else None
 
         logger.info("股市推播機器人初始化完成")
 
@@ -230,6 +233,16 @@ class StockBot:
             if discoveries:
                 self.notifier.send_discovery_report(discoveries)
                 
+            # 發送持倉評估報告
+            if self.enable_portfolio and self.portfolio_analyzer:
+                try:
+                    portfolio_summary = self.portfolio_analyzer.analyze()
+                    self.notifier.send_portfolio_report(portfolio_summary)
+                except FileNotFoundError:
+                    logger.info("未找到 holdings.json，跳過持倉評估")
+                except Exception as e:
+                    logger.warning(f"持倉評估失敗: {e}")
+
             # 最後發送免責聲明
             self.notifier.send_message(
                 content=(
@@ -449,12 +462,23 @@ def main():
         help="停用總經景氣循環分析"
     )
 
+    parser.add_argument(
+        "--no-portfolio",
+        action="store_true",
+        help="停用持倉評估"
+    )
+
     args = parser.parse_args()
 
     # 初始化機器人（快速模式或明確停用時關閉發現/總經功能）
     enable_discovery = not args.no_discovery and not args.quick
     enable_macro = not args.no_macro and not args.quick
-    bot = StockBot(webhook_url=args.webhook, enable_discovery=enable_discovery, enable_macro=enable_macro)
+    bot = StockBot(
+        webhook_url=args.webhook,
+        enable_discovery=enable_discovery,
+        enable_macro=enable_macro,
+        enable_portfolio=not args.no_portfolio,
+    )
 
     if args.mode == "schedule":
         # 排程模式

@@ -14,6 +14,7 @@ from .market_analyzer import MarketAnalysis, TrendDirection
 from .sector_scanner import SectorAnalysis, StockAnalysis
 from .predictor import PricePrediction, MarketOutlook, PredictionDirection
 from .cycle_analyzer import CycleAnalysis, CyclePhase, PHASE_COLORS
+from .portfolio_analyzer import PortfolioSummary, HoldingAnalysis
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -651,6 +652,74 @@ class DiscordNotifier:
             embeds.append(embed)
 
         return self.send_message(embeds=embeds)
+
+    def send_portfolio_report(self, summary: PortfolioSummary) -> bool:
+        """
+        發送持倉評估報告到 Discord。
+
+        Args:
+            summary: PortfolioSummary from PortfolioAnalyzer.analyze()
+
+        Returns:
+            True if sent successfully
+        """
+        pnl_sign = "+" if summary.total_pnl >= 0 else ""
+        gap_sign = "還差 " if summary.gap_to_target > 0 else "已超越 "
+        gap_abs = abs(summary.gap_to_target)
+
+        lines = [
+            f"💼 **整體組合**",
+            f"　總市值：{summary.total_value:,.0f}",
+            f"　整體損益：{pnl_sign}{summary.total_pnl:,.0f} ({pnl_sign}{summary.total_pnl_pct:.1%})",
+            f"　1年加權報酬：{summary.portfolio_return_1y:.1%}",
+            f"　距年目標({summary.target_return:.0%})：{gap_sign}{gap_abs:.1%}",
+            "─" * 25,
+        ]
+
+        for rec_label, rec_code in [
+            ("📈 建議加碼", "add"),
+            ("📉 建議減碼", "reduce"),
+            ("🗑️  建議移除", "remove"),
+            ("✅ 維持", "hold"),
+        ]:
+            group = [h for h in summary.holdings if h.recommendation == rec_code]
+            if not group:
+                continue
+
+            lines.append(f"**{rec_label}**")
+
+            if rec_code == "hold":
+                symbols = "、".join(h.symbol for h in group)
+                lines.append(f"　{symbols}")
+            else:
+                for h in group:
+                    pnl_sign = "+" if h.pnl >= 0 else ""
+                    lines.append(
+                        f"　**{h.symbol}**　實際 {h.actual_weight:.0%} → 目標 {h.target_weight:.0%}"
+                    )
+                    lines.append(
+                        f"　損益：{pnl_sign}{h.pnl:,.0f} ({pnl_sign}{h.pnl_pct:.1%})｜Sharpe：{h.sharpe_ratio:.2f}"
+                    )
+                    if h.recommendation == "add" and h.add_price_low:
+                        lines.append(
+                            f"　加碼區間：{h.add_price_low}–{h.add_price_high}（{h.add_price_note}）"
+                        )
+
+            lines.append("")
+
+        lines.append("─" * 25)
+        description = "\n".join(lines)
+
+        # Discord embed colour: green if portfolio beats target, orange if behind
+        color = self.colors["bullish"] if summary.gap_to_target <= 0 else self.colors["warning"]
+
+        embed = {
+            "title": "📊 持倉評估報告",
+            "description": description,
+            "color": color,
+        }
+
+        return self.send_message(embeds=[embed])
 
     # 此方法已被棄用，實際處理邏輯已移至 main.py
     def send_daily_report(
