@@ -54,6 +54,14 @@ jobs:
           p.write_text(text)
           "
 
+      - name: 💼 建立持倉設定檔
+        env:
+          HOLDINGS_JSON: ${{ secrets.HOLDINGS_JSON }}
+        run: |
+          if [ -n "$HOLDINGS_JSON" ]; then
+            echo "$HOLDINGS_JSON" > config/holdings.json
+          fi
+
       - name: 🔍 判斷分析市場
         id: market
         run: |
